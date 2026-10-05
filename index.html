@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遺留物管理中心 | Boutique Lost & Found</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Noto Sans TC"', 'sans-serif'] },
+                    colors: { custom: { base: '#f2f0ed', dark: '#666464', accent: '#72c3d7' } },
+                    boxShadow: { 'soft': '0 4px 20px rgba(102, 100, 100, 0.05)' }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { background-color: #f2f0ed; color: #666464; -webkit-font-smoothing: antialiased; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(102, 100, 100, 0.15); border-radius: 10px; }
+        .modal-enter { opacity: 0; transform: scale(0.98) translateY(5px); }
+        .modal-enter-active { opacity: 1; transform: scale(1) translateY(0); transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #72c3d7; box-shadow: 0 0 0 2px rgba(114, 195, 215, 0.15); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden font-sans text-custom-dark relative">
+
+    <div id="loading-overlay" class="hidden absolute inset-0 bg-custom-base/80 backdrop-blur-[2px] z-[100] flex-col items-center justify-center">
+        <i class="fas fa-circle-notch fa-spin text-4xl text-custom-accent mb-4"></i>
+        <p class="text-custom-dark font-bold tracking-widest text-sm uppercase">讀取中...</p>
+    </div>
+
+    <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- 登入畫面 -->
+    <div id="login-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-custom-base">
+        <div class="bg-white p-10 rounded-2xl shadow-soft w-full max-w-sm mx-4 relative overflow-hidden border border-custom-dark/10">
+            <div class="absolute top-0 left-0 w-full h-1 bg-custom-accent"></div>
+            <div class="text-center mb-8 mt-2">
+                <div class="w-14 h-14 bg-custom-base rounded-full flex items-center justify-center mx-auto mb-4 border border-custom-dark/5">
+                    <i class="fas fa-box-open text-xl text-custom-accent"></i>
+                </div>
+                <h1 class="text-xl font-bold text-custom-dark tracking-wide">遺留物管理系統</h1>
+            </div>
+            <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); submitLogin();">
+                <input type="text" id="username" required autocomplete="off" class="w-full bg-custom-base/30 border border-custom-dark/20 px-4 py-3 rounded-lg text-center text-sm" placeholder="請輸入帳號">
+                <input type="password" id="password" required autocomplete="off" class="w-full bg-custom-base/30 border border-custom-dark/20 px-4 py-3 rounded-lg text-center text-sm" placeholder="請輸入密碼">
+                <button type="submit" class="w-full bg-custom-accent hover:opacity-90 text-white font-bold py-3 rounded-lg transition-colors mt-2 shadow-sm">登入系統</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 主系統畫面 -->
+    <div id="app-screen" class="hidden flex-col h-full w-full">
+        <nav class="bg-white shrink-0 z-20 shadow-sm border-b border-custom-dark/10">
+            <div class="max-w-6xl mx-auto px-4 lg:px-8">
+                <div class="flex justify-between h-16 items-center">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-box-open text-custom-accent text-lg"></i>
+                        <h1 class="font-bold text-base md:text-lg tracking-wide whitespace-nowrap">遺留物管理</h1>
+                    </div>
+                    <div class="flex items-center gap-2 md:gap-4">
+                        <button onclick="openAddModal()" class="bg-custom-accent hover:opacity-90 text-white px-3 py-2 md:px-4 rounded-lg text-sm font-bold flex items-center gap-2"><i class="fas fa-plus"></i> <span class="hidden md:inline">新增物品</span></button>
+                        <button onclick="switchToDeletedZone()" id="btn-deleted-zone" class="bg-custom-base hover:bg-custom-dark hover:text-white text-custom-dark px-3 py-2 md:px-4 border border-custom-dark/10 rounded-lg text-sm font-bold flex items-center gap-2"><i class="fas fa-archive"></i> <span class="hidden md:inline">刪除區紀錄</span></button>
+                        <div class="h-6 w-px bg-custom-dark/10 mx-1 md:mx-2 hidden sm:block"></div>
+                        <div class="text-sm items-center gap-2 px-2 py-1 hidden sm:flex"><i class="fas fa-user-circle text-custom-accent/70 text-lg"></i> <span id="display-username" class="font-medium"></span></div>
+                        <button onclick="handleLogout()" class="text-custom-dark/50 hover:text-custom-dark p-2"><i class="fas fa-sign-out-alt"></i></button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="bg-white shrink-0 z-10 border-b border-custom-dark/10">
+            <div class="max-w-6xl mx-auto px-6 lg:px-8">
+                <div class="flex space-x-6 md:space-x-8 overflow-x-auto no-scrollbar">
+                    <button class="tab-btn active group py-4 px-2 relative text-sm font-bold text-custom-dark flex items-center gap-2" data-tab="safe" onclick="switchMainTab('safe')">
+                        <span class="tracking-wider">保險箱</span><span id="count-safe" class="bg-custom-accent text-white px-2 py-0.5 rounded-full text-xs font-bold ml-1 transition-all">0</span>
+                        <div class="tab-indicator absolute bottom-0 left-0 w-full h-0.5 bg-custom-accent transition-all duration-300"></div>
+                    </button>
+                    <button class="tab-btn group py-4 px-2 relative text-sm font-bold text-custom-dark/50 hover:text-custom-dark flex items-center gap-2" data-tab="retention" onclick="switchMainTab('retention')">
+                        <span class="tracking-wider">保留區</span><span id="count-retention" class="bg-custom-dark/10 text-custom-dark px-2 py-0.5 rounded-full text-xs font-bold ml-1 transition-all">0</span>
+                        <div class="tab-indicator absolute bottom-0 left-0 w-0 h-0.5 bg-custom-accent transition-all duration-300 group-hover:w-full"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <main class="flex-1 overflow-y-auto p-4 lg:p-8 relative flex flex-col items-center">
+            <div class="w-full max-w-6xl flex flex-col h-full gap-5 flex-1">
+                <div id="search-section" class="hidden shrink-0 w-full">
+                    <div class="relative w-full max-w-md">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-custom-dark/40"><i class="fas fa-search"></i></div>
+                        <input type="text" id="search-input" class="w-full bg-white border border-custom-dark/20 rounded-lg pl-11 pr-4 py-2.5 text-sm" placeholder="搜尋日期、區域、失主、物品..." oninput="handleSearch()">
+                    </div>
+                </div>
+
+                <div id="interactive-section" class="shrink-0 flex flex-col gap-3 w-full">
+                    <div id="months-grid" class="flex gap-2 lg:gap-3 overflow-x-auto pb-2 custom-scrollbar"></div>
+                </div>
+
+                <div class="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-soft border border-custom-dark/10 w-full overflow-hidden relative">
+                    <div class="flex items-center px-6 py-4 shrink-0 border-b border-custom-dark/10 bg-[#faf9f8] z-10">
+                        <h3 id="list-title" class="font-bold text-base tracking-wide flex items-center gap-2"></h3>
+                        <div id="sync-status" class="ml-auto flex items-center gap-2 text-[10px] text-custom-dark/40 transition-opacity opacity-0">
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span>同步中
+                        </div>
+                    </div>
+                    <div id="item-list-container" class="flex-1 overflow-y-auto custom-scrollbar flex flex-col relative"></div>
+                    <div id="empty-state" class="hidden absolute inset-0 flex-col justify-center items-center text-custom-dark/50 bg-white z-0 mt-[60px]">
+                        <i class="fas fa-folder-open text-4xl mb-4 opacity-20"></i><p id="empty-state-text" class="text-sm font-medium tracking-wide">目前沒有紀錄</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 新增/編輯 Modal -->
+    <div id="item-modal" class="hidden fixed inset-0 bg-custom-dark/20 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col border border-custom-dark/10">
+            <div class="px-6 py-5 flex justify-between items-center shrink-0 border-b border-custom-base">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-custom-accent">
+                    <i id="modal-icon" class="fas fa-plus text-sm"></i> <span id="modal-title-text">新增物品登記</span>
+                </h3>
+                <button onclick="closeItemModal()" class="text-custom-dark/40 hover:bg-custom-base w-8 h-8 rounded-full"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-white">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">存放區域</label>
+                        <select id="item-category" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm">
+                            <option value="safe">保險箱</option>
+                            <option value="retention">保留區</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">拾獲日期</label>
+                        <input type="date" id="item-date" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">房號 / 區域</label>
+                        <input type="text" id="item-room" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm" placeholder="例: 101 或 大廳">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">物品名稱</label>
+                        <input type="text" id="item-name" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 bg-custom-base/30 p-3.5 rounded-xl border border-custom-dark/10">
+                    <div>
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">失主姓名 <span class="font-normal opacity-60">(選填)</span></label>
+                        <input type="text" id="item-owner-name" class="w-full bg-white border border-custom-dark/20 px-3 py-2 rounded-lg text-sm transition-colors focus:bg-white" placeholder="例: 王先生">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">聯絡電話 <span class="font-normal opacity-60">(選填)</span></label>
+                        <input type="text" id="item-owner-phone" class="w-full bg-white border border-custom-dark/20 px-3 py-2 rounded-lg text-sm transition-colors focus:bg-white" placeholder="例: 0912345678">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">拾獲人 <span class="font-normal opacity-60">(選填)</span></label>
+                    <input type="text" id="item-finder" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm">
+                </div>
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-custom-dark/70 mb-1.5 uppercase tracking-wider">備註事項 <span class="font-normal opacity-60">(選填)</span></label>
+                    <textarea id="item-note" rows="2" class="w-full bg-custom-base/50 border border-custom-dark/20 px-3 py-2.5 rounded-lg text-sm resize-none"></textarea>
+                </div>
+            </div>
+            
+            <div class="bg-[#faf9f8] border-t border-custom-dark/10 px-6 py-4 flex justify-end gap-3 shrink-0">
+                <button onclick="closeItemModal()" class="px-5 py-2 text-sm bg-white border border-custom-dark/20 hover:bg-custom-base rounded-lg font-bold">取消</button>
+                <button onclick="submitItem()" id="modal-submit-btn" class="px-5 py-2 text-sm bg-custom-accent hover:opacity-90 text-white rounded-lg font-bold shadow-sm">確認新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歷史紀錄查看 Modal -->
+    <div id="history-modal" class="hidden fixed inset-0 bg-custom-dark/20 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col border border-custom-dark/10">
+            <div class="px-6 py-5 flex justify-between items-center shrink-0 border-b border-custom-base">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-custom-accent">
+                    <i class="fas fa-history text-sm"></i> 物品修改紀錄
+                </h3>
+                <button onclick="closeHistoryModal()" class="text-custom-dark/40 hover:bg-custom-base hover:text-custom-dark w-8 h-8 rounded-full transition-colors"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh] bg-custom-base/20 custom-scrollbar">
+                <pre id="history-content" class="text-[13px] text-custom-dark font-sans whitespace-pre-wrap leading-relaxed tracking-wide"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 取出 Modal -->
+    <div id="retrieve-modal" class="hidden fixed inset-0 bg-custom-dark/20 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden transform transition-transform scale-95 opacity-0 border border-custom-dark/5" id="retrieve-modal-content">
+            <div class="p-8 text-center relative">
+                <button onclick="closeRetrieveModal()" class="absolute top-4 right-4 text-custom-dark/40 hover:bg-custom-base hover:text-custom-dark w-8 h-8 rounded-full"><i class="fas fa-times"></i></button>
+                <div class="w-12 h-12 bg-custom-accent/10 rounded-full flex items-center justify-center mx-auto mb-4 text-custom-accent text-xl"><i class="fas fa-hand-holding"></i></div>
+                <h3 class="text-lg font-bold mb-1">物品取出作業</h3>
+                <p class="text-custom-dark/60 text-sm mb-6 bg-custom-base/50 p-2 rounded-lg mt-3">
+                    區域 <span id="retrieve-room" class="font-bold text-custom-dark mx-1"></span><br><span id="retrieve-name" class="font-bold text-custom-dark text-base mt-1 inline-block"></span>
+                </p>
+                <div class="flex flex-col gap-3">
+                    <button onclick="executeRetrieve('guest')" class="w-full bg-white border-2 border-custom-accent text-custom-accent hover:bg-custom-accent hover:text-white py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 transition-colors"><i class="fas fa-user-check"></i> 客人取走</button>
+                    <button onclick="executeRetrieve('expired')" class="w-full bg-white border-2 border-custom-dark/20 text-custom-dark/70 hover:border-custom-dark hover:bg-custom-dark hover:text-white py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 transition-colors"><i class="fas fa-trash-alt text-xs"></i> 逾期整理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        const API_URL = "https://script.google.com/macros/s/AKfycbxCLUDHt9R22rFYW2VAYStejAOjlkyXQasyKVezQEexFxgL_yEdYXlImONzU0vwAAL8/exec";
+        // ==========================================
+
+        let currentUser = ''; let currentPassword = '';
+        let currentTab = 'safe'; let currentMonth = new Date().getMonth() + 1;
+        let dbItems = []; let itemToRetrieve = null; 
+        let editTargetId = null; let searchQuery = '';
+
+        function el(id) { return document.getElementById(id); }
+
+        async function apiCallWithRetry(payload, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+                    return await res.json();
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(function(resolve) { setTimeout(resolve, 1000 * (i + 1)); });
+                }
+            }
+        }
+
+        window.onload = function() {
+            try { 
+                currentUser = localStorage.getItem('boutique_lf_user_v17') || ''; 
+                currentPassword = localStorage.getItem('boutique_lf_pass_v17') || ''; 
+            } catch (e) {}
+
+            const today = new Date();
+            if (el('item-date')) el('item-date').value = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
+
+            if (currentUser && currentPassword) { 
+                showApp(); 
+                // 🚀 關鍵快取機制：有快取就瞬間畫圖，然後在背景更新
+                const cachedData = localStorage.getItem('boutique_lf_cache_v17');
+                if (cachedData) {
+                    processFetchedData(JSON.parse(cachedData));
+                    renderView();
+                    loadDataBackground(); 
+                } else {
+                    loadData(); // 第一次登入才轉圈圈
+                }
+            } else { 
+                showLogin(); 
+            }
+
+            setInterval(function() { 
+                if (currentUser) loadDataBackground(); 
+            }, 3 * 60 * 1000);
+        };
+
+        function toggleLoader(show) { if(el('loading-overlay')) el('loading-overlay').style.display = show ? 'flex' : 'none'; }
+        function toggleSyncBadge(show) { if(el('sync-status')) el('sync-status').style.opacity = show ? '1' : '0'; }
+
+        async function submitLogin() {
+            const u = el('username').value.trim(); const p = el('password').value.trim();
+            if(!u || !p) return showToast("請輸入完整帳號密碼", "error");
+            
+            toggleLoader(true);
+            try {
+                const data = await apiCallWithRetry({ action: "login", username: u, password: p });
+                if(data.success) {
+                    currentUser = data.user; currentPassword = p;
+                    try { 
+                        localStorage.setItem('boutique_lf_user_v17', currentUser); 
+                        localStorage.setItem('boutique_lf_pass_v17', currentPassword); 
+                    } catch(err) {}
+                    showApp(); 
+                    loadData(); 
+                    showToast("登入成功，歡迎 " + currentUser, 'success');
+                } else { 
+                    showToast(data.message || "登入失敗", 'error'); 
+                }
+            } catch(err) { showToast("連線至伺服器失敗，請檢查網路連線", 'error'); }
+            toggleLoader(false);
+        }
+
+        async function loadData() {
+            toggleLoader(true);
+            try {
+                const data = await apiCallWithRetry({ action: "getData", username: currentUser, password: currentPassword });
+                if(data.success) { 
+                    try { localStorage.setItem('boutique_lf_cache_v17', JSON.stringify(data.data)); } catch(e){}
+                    processFetchedData(data.data); 
+                    renderView(); 
+                } else { 
+                    showToast("密碼已變更或授權過期", "error"); 
+                    handleLogout(); 
+                }
+            } catch (e) { showToast("讀取資料失敗，請重新整理", "error"); }
+            toggleLoader(false);
+        }
+
+        async function loadDataBackground() {
+            toggleSyncBadge(true);
+            try {
+                const data = await apiCallWithRetry({ action: "getData", username: currentUser, password: currentPassword }, 2);
+                if(data.success) { 
+                    try { localStorage.setItem('boutique_lf_cache_v17', JSON.stringify(data.data)); } catch(e){}
+                    processFetchedData(data.data); 
+                    renderView(); 
+                }
+            } catch (e) {}
+            setTimeout(function(){ toggleSyncBadge(false); }, 1500);
+        }
+
+        function processFetchedData(data) {
+            dbItems = [];
+            const parseFields = function(d, cat) {
+                return {
+                    id: d['ID'], category: cat, date: d['日期'], month: parseInt(d['月份']),
+                    room: d['房號'], name: d['物品名稱'], finder: d['拾獲人'], note: d['備註'],
+                    ownerName: d['失主姓名'], ownerPhone: d['失主電話'], editHistory: d['編輯紀錄'],
+                    status: 'active', addedBy: d['建立者'] || '系統'
+                };
+            };
+            if(data.valuable) data.valuable.forEach(function(d) { dbItems.push(parseFields(d, 'safe')); });
+            if(data.soon) data.soon.forEach(function(d) { dbItems.push(parseFields(d, 'retention')); });
+            if(data.deleted) data.deleted.forEach(function(d) {
+                dbItems.push({
+                    id: d['ID'], category: d['原區域'] === '保險箱' ? 'safe' : 'retention',
+                    date: d['日期'], month: parseInt(d['月份']), room: d['房號'], name: d['物品名稱'], 
+                    finder: d['拾獲人'], note: d['備註'], ownerName: d['失主姓名'], ownerPhone: d['失主電話'], 
+                    editHistory: d['編輯紀錄'], status: 'deleted', 
+                    deleteReason: d['狀態'] === '客人取走' ? 'guest' : 'expired', 
+                    deletedBy: d['處理人'] || '系統', deletedAtStr: d['處理時間']
+                });
+            });
+        }
+
+        function handleLogout() {
+            currentUser = ''; currentPassword = '';
+            try { 
+                localStorage.removeItem('boutique_lf_user_v17'); 
+                localStorage.removeItem('boutique_lf_pass_v17'); 
+                localStorage.removeItem('boutique_lf_cache_v17');
+            } catch(e){}
+            showLogin();
+        }
+
+        function showApp() { el('login-screen').classList.add('hidden'); el('app-screen').classList.remove('hidden'); el('app-screen').classList.add('flex'); el('display-username').innerText = currentUser; }
+        function showLogin() { el('app-screen').classList.add('hidden'); el('app-screen').classList.remove('flex'); el('login-screen').classList.remove('hidden'); }
+
+        function switchMainTab(tabName) {
+            currentTab = tabName; searchQuery = ''; el('search-input').value = '';
+            el('btn-deleted-zone').classList.remove('bg-custom-dark', 'text-white'); el('btn-deleted-zone').classList.add('bg-custom-base', 'text-custom-dark');
+            document.querySelectorAll('.tab-btn').forEach(function(b) { 
+                b.classList.remove('text-custom-dark', 'active'); b.classList.add('text-custom-dark/50'); b.querySelector('.tab-indicator').classList.replace('w-full', 'w-0'); 
+            });
+            const activeBtn = document.querySelector(".tab-btn[data-tab='" + tabName + "']");
+            if (activeBtn) {
+                activeBtn.classList.remove('text-custom-dark/50'); activeBtn.classList.add('text-custom-dark', 'active');
+                activeBtn.querySelector('.tab-indicator').classList.replace('w-0', 'w-full');
+            }
+            renderView();
+        }
+
+        function switchToDeletedZone() {
+            currentTab = 'deleted'; searchQuery = ''; el('search-input').value = '';
+            document.querySelectorAll('.tab-btn').forEach(function(b) { 
+                b.classList.remove('text-custom-dark', 'active'); b.classList.add('text-custom-dark/50'); b.querySelector('.tab-indicator').classList.replace('w-full', 'w-0'); 
+            });
+            el('btn-deleted-zone').classList.remove('bg-custom-base', 'text-custom-dark'); el('btn-deleted-zone').classList.add('bg-custom-dark', 'text-white');
+            renderView();
+        }
+
+        function handleSearch() { searchQuery = el('search-input').value.toLowerCase().trim(); renderList(currentTab === 'deleted'); }
+
+        function updateBadges() {
+            el('count-safe').innerText = dbItems.filter(function(i) { return i.status === 'active' && i.category === 'safe'; }).length;
+            el('count-retention').innerText = dbItems.filter(function(i) { return i.status === 'active' && i.category === 'retention'; }).length;
+            el('count-safe').className = currentTab === 'safe' ? 'bg-custom-accent text-white px-2 py-0.5 rounded-full text-[10px] font-bold ml-1' : 'bg-custom-dark/10 text-custom-dark px-2 py-0.5 rounded-full text-[10px] font-bold ml-1';
+            el('count-retention').className = currentTab === 'retention' ? 'bg-custom-accent text-white px-2 py-0.5 rounded-full text-[10px] font-bold ml-1' : 'bg-custom-dark/10 text-custom-dark px-2 py-0.5 rounded-full text-[10px] font-bold ml-1';
+        }
+
+        function renderView() {
+            updateBadges();
+            if (currentTab === 'deleted') {
+                el('interactive-section').classList.add('hidden'); el('search-section').classList.remove('hidden');
+                el('list-title').innerHTML = "<i class='fas fa-archive text-custom-dark/40 mr-2'></i> 所有歷史刪除紀錄";
+                renderList(true);
+            } else {
+                el('interactive-section').classList.remove('hidden'); el('search-section').classList.add('hidden');
+                renderMonthsGrid(); renderList(false);
+            }
+        }
+
+        function renderMonthsGrid() {
+            el('months-grid').innerHTML = '';
+            for (let i = 1; i <= 12; i++) {
+                const has = dbItems.some(function(item) { return item.status === 'active' && item.category === currentTab && item.month === i; });
+                const btn = document.createElement('button');
+                let btnClass = "min-w-[50px] lg:min-w-[56px] h-[50px] lg:h-[56px] rounded-xl flex flex-col items-center justify-center transition-all border ";
+                if (has) { btnClass += "bg-custom-accent border-custom-accent text-white "; if (i !== currentMonth) btnClass += "opacity-80 hover:opacity-100"; } 
+                else if (i === currentMonth) { btnClass += "border-custom-accent bg-white text-custom-accent"; } 
+                else { btnClass += "border-custom-dark/10 bg-white text-custom-dark/40 hover:bg-custom-base"; }
+                btn.className = btnClass;
+                btn.innerHTML = "<span class='text-lg font-bold leading-none mb-0.5'>" + i + "</span><span class='text-[9px] uppercase font-bold tracking-widest opacity-80 mt-0.5'>月</span>";
+                btn.onclick = function() { currentMonth = i; renderView(); };
+                el('months-grid').appendChild(btn);
+            }
+        }
+
+        function renderList(isDel) {
+            el('item-list-container').innerHTML = '';
+            let list = isDel ? dbItems.filter(function(i) { return i.status === 'deleted'; }) : dbItems.filter(function(i) { return i.status === 'active' && i.category === currentTab && i.month === currentMonth; });
+            
+            if (isDel && searchQuery) {
+                list = list.filter(function(i) { return (i.date + i.room + i.name + (i.ownerName||'') + (i.ownerPhone||'') + (i.note||'')).toLowerCase().includes(searchQuery); });
+            }
+            
+            if (isDel) { 
+                list.sort(function(a,b) { return new Date(b.deletedAtStr) - new Date(a.deletedAtStr); }); 
+            } else {
+                list.sort(function(a,b) { return new Date(a.date) - new Date(b.date); });
+                const catName = currentTab === 'safe' ? '保險箱' : '保留區';
+                el('list-title').innerHTML = "<span class='text-custom-accent font-bold'>" + currentMonth + "月份</span> <span class='mx-1.5'>-</span> <span>" + catName + "</span> <span class='text-xs font-normal ml-2 text-custom-dark/50'>(共 " + list.length + " 件)</span>";
+            }
+            
+            if (list.length === 0) {
+                el('empty-state').classList.remove('hidden'); el('empty-state').classList.add('flex');
+                el('empty-state-text').innerText = isDel ? (searchQuery ? "找不到符合的結果" : "目前沒有刪除紀錄") : "這個月份沒有紀錄";
+            } else {
+                el('empty-state').classList.add('hidden'); el('empty-state').classList.remove('flex');
+                list.forEach(function(item) {
+                    const row = document.createElement('div');
+                    row.innerHTML = isDel ? createDeletedRowHTML(item) : createActiveRowHTML(item);
+                    el('item-list-container').appendChild(row.firstElementChild);
+                });
+            }
+        }
+
+        function formatRoom(roomText) { return roomText || ""; }
+
+        // ==========================================
+        // 🌟 最終排版對齊區域：強制鎖定 100px 寬度，完美對齊
+        // ==========================================
+        function createActiveRowHTML(item) {
+            let ownerBadge = "";
+            if (item.ownerName || item.ownerPhone) {
+                const n = item.ownerName || "未留名"; const p = item.ownerPhone ? " - " + item.ownerPhone : "";
+                ownerBadge = "<span class='bg-custom-accent/15 text-custom-accent px-2.5 py-0.5 rounded-md font-bold flex items-center gap-1.5'><i class='fas fa-address-book text-[10px]'></i> " + n + p + "</span>";
+            }
+            const finderBadge = item.finder ? "<span class='flex items-center gap-1'><i class='fas fa-user-tag opacity-40'></i>拾獲: " + item.finder + "</span>" : "";
+            const noteBadge = item.note ? "<span class='flex items-center gap-1'><i class='fas fa-quote-left opacity-40'></i>" + item.note + "</span>" : "";
+            const editBadge = item.editHistory ? "<button onclick=\"showEditHistory('" + item.id + "')\" class='text-amber-600/80 font-bold border-b border-dashed border-amber-600/30 flex items-center gap-1 hover:text-amber-700 transition-colors'><i class='fas fa-history text-[10px]'></i>查看修改紀錄</button>" : "";
+
+            return "<div class='flex flex-col md:flex-row md:items-center justify-between p-4 px-6 border-b border-custom-dark/5 hover:bg-custom-base/40 gap-3'>" +
+                "<div class='flex-1 flex flex-col md:flex-row md:items-center gap-3 md:gap-6 min-w-0'>" +
+                    "<div class='flex items-center md:w-28 shrink-0'><span class='text-xs font-bold text-custom-dark/50 tracking-wider'>" + item.date + "</span></div>" +
+                    "<div class='flex flex-col min-w-0 flex-1'>" +
+                        "<div class='flex items-center'>" +
+                            "<div class='font-bold text-lg w-[80px] sm:w-[100px] shrink-0 truncate border-r border-custom-dark/20 mr-3 pr-3 sm:mr-4 sm:pr-4' title='" + formatRoom(item.room) + "'>" + formatRoom(item.room) + "</div>" +
+                            "<h4 class='font-bold text-custom-dark/90 text-base truncate flex-1' title='" + item.name + "'>" + item.name + "</h4>" +
+                        "</div>" +
+                        "<div class='flex items-center gap-4 mt-2 text-[11px] text-custom-dark/60 flex-wrap'>" + ownerBadge + finderBadge + noteBadge + editBadge + "</div>" +
+                    "</div>" +
+                "</div>" +
+                "<div class='flex items-center gap-2.5 shrink-0 self-end md:self-auto mt-3 md:mt-0'>" +
+                    "<div class='text-[10px] text-right text-custom-dark/40 mr-2 hidden sm:block leading-tight'>建檔<br><span class='font-bold text-custom-dark/70'>" + item.addedBy + "</span></div>" +
+                    "<button onclick=\"openEditModal('" + item.id + "')\" class='px-3 py-1.5 border border-custom-dark/20 text-custom-dark hover:bg-custom-dark hover:text-white rounded-md text-xs font-bold'>編輯</button>" +
+                    "<button onclick=\"openRetrieveModal('" + item.id + "')\" class='px-4 py-1.5 bg-custom-accent text-white hover:bg-[#5fb3c9] rounded-md text-xs font-bold shadow-sm'>取出</button>" +
+                "</div>" +
+            "</div>";
+        }
+
+        function createDeletedRowHTML(item) {
+            const badge = item.deleteReason === 'guest' ? "<span class='text-custom-accent font-bold bg-custom-accent/10 px-2 py-0.5 rounded flex items-center gap-1'><i class='fas fa-user-check text-[10px]'></i> 客人取走</span>" : "<span class='text-custom-dark/70 font-bold bg-custom-dark/5 px-2 py-0.5 rounded flex items-center gap-1'><i class='fas fa-trash-alt text-[10px]'></i> 逾期整理</span>";
+            const catName = item.category === 'safe' ? '保險箱' : '保留區';
+            let ownerText = "";
+            if (item.ownerName || item.ownerPhone) ownerText = "<span class='flex items-center gap-1.5'><i class='fas fa-address-book opacity-40'></i>失主: " + (item.ownerName||'未填') + " " + (item.ownerPhone||'') + "</span>";
+            const editBadge = item.editHistory ? "<button onclick=\"showEditHistory('" + item.id + "')\" class='cursor-pointer border-b border-dashed border-custom-dark/20 flex items-center gap-1 hover:text-custom-dark transition-colors'><i class='fas fa-history text-[10px] opacity-60'></i>查看紀錄</button>" : "";
+
+            return "<div class='flex flex-col md:flex-row md:items-center justify-between p-4 px-6 border-b border-custom-dark/5 bg-white opacity-95 gap-3 hover:bg-custom-base/20'>" +
+                "<div class='flex-1 flex flex-col md:flex-row md:items-center gap-3 md:gap-6 min-w-0'>" +
+                    "<div class='flex items-center gap-2 md:w-28 shrink-0'><span class='text-[10px] px-1.5 py-0.5 bg-custom-base text-custom-dark/60 rounded font-bold'>" + catName + "</span><span class='text-[11px] font-bold text-custom-dark/30 line-through'>" + item.date + "</span></div>" +
+                    "<div class='flex flex-col min-w-0 flex-1'>" +
+                        "<div class='flex items-center'>" +
+                            "<div class='font-bold text-custom-dark/40 text-lg line-through w-[80px] sm:w-[100px] shrink-0 truncate border-r border-custom-dark/10 mr-3 pr-3 sm:mr-4 sm:pr-4' title='" + formatRoom(item.room) + "'>" + formatRoom(item.room) + "</div>" +
+                            "<h4 class='font-bold text-custom-dark/40 text-base truncate line-through flex-1' title='" + item.name + "'>" + item.name + "</h4>" +
+                            "<div class='ml-3 text-[11px] shrink-0'>" + badge + "</div>" +
+                        "</div>" +
+                        "<div class='flex items-center gap-4 mt-2 text-[11px] text-custom-dark/40 flex-wrap'>" + ownerText + editBadge + "</div>" +
+                    "</div>" +
+                "</div>" +
+                "<div class='flex flex-col items-end shrink-0 text-[10px] text-custom-dark/50 bg-custom-base/40 px-3 py-1.5 rounded-lg border border-custom-dark/5'><div>處理: <span class='font-bold text-custom-dark/70'>" + item.deletedBy + "</span></div><div class='mt-0.5 text-[9px]'>" + item.deletedAtStr + "</div></div>" +
+            "</div>";
+        }
+
+        function showEditHistory(id) {
+            const item = dbItems.find(function(i) { return i.id === id; });
+            if(!item || !item.editHistory) return;
+            el('history-content').innerText = item.editHistory;
+            el('history-modal').classList.remove('hidden');
+            el('history-modal').querySelector('div').classList.replace('modal-enter', 'modal-enter-active');
+        }
+
+        function closeHistoryModal() {
+            el('history-modal').querySelector('div').classList.replace('modal-enter-active', 'modal-enter');
+            setTimeout(function() { el('history-modal').classList.add('hidden'); }, 250);
+        }
+
+        function openAddModal() {
+            editTargetId = null;
+            el('modal-title-text').innerText = '新增物品登記';
+            el('modal-icon').className = 'fas fa-plus text-sm';
+            el('modal-submit-btn').innerText = '確認新增';
+            el('item-category').disabled = false;
+            el('item-category').value = currentTab !== 'deleted' ? currentTab : 'safe';
+            
+            const today = new Date();
+            el('item-date').value = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
+            ['room','name','owner-name','owner-phone','finder','note'].forEach(function(id) { el('item-'+id).value = ''; });
+            
+            el('item-modal').classList.remove('hidden');
+            el('item-modal').querySelector('div').classList.replace('modal-enter', 'modal-enter-active');
+        }
+
+        function openEditModal(id) {
+            const item = dbItems.find(function(i) { return i.id === id; });
+            if(!item) return; 
+            editTargetId = id;
+            el('modal-title-text').innerText = '編輯物品資訊';
+            el('modal-icon').className = 'fas fa-pen text-sm';
+            el('modal-submit-btn').innerText = '儲存修改';
+            el('item-category').disabled = true; 
+            
+            el('item-category').value = item.category;
+            el('item-date').value = item.date;
+            el('item-room').value = item.room;
+            el('item-name').value = item.name;
+            el('item-owner-name').value = item.ownerName || '';
+            el('item-owner-phone').value = item.ownerPhone || '';
+            el('item-finder').value = item.finder || '';
+            el('item-note').value = item.note || '';
+            
+            el('item-modal').classList.remove('hidden');
+            el('item-modal').querySelector('div').classList.replace('modal-enter', 'modal-enter-active');
+        }
+
+        function closeItemModal() {
+            el('item-modal').querySelector('div').classList.replace('modal-enter-active', 'modal-enter');
+            setTimeout(function() { el('item-modal').classList.add('hidden'); }, 250);
+        }
+
+        async function submitItem() {
+            const v = {
+                cat: el('item-category').value, date: el('item-date').value,
+                room: el('item-room').value.trim(), name: el('item-name').value.trim(),
+                ownerName: el('item-owner-name').value.trim(), ownerPhone: el('item-owner-phone').value.trim(),
+                finder: el('item-finder').value.trim(), note: el('item-note').value.trim()
+            };
+            if (!v.date || !v.room || !v.name) return showToast('日期、區域與物品名稱為必填', 'error');
+            const pMonth = parseInt(v.date.split('-')[1], 10);
+            const mTab = v.cat === 'safe' ? '保險箱' : '保留區';
+
+            if (editTargetId) {
+                const old = dbItems.find(function(i) { return i.id === editTargetId; });
+                let diffs = [];
+                const checkDiff = function(field, oldV, newV) {
+                    const o = oldV || '空'; const n = newV || '空';
+                    if(o !== n) diffs.push(" • " + field + ": " + o + " ➡️ " + n);
+                };
+                checkDiff('日期', old.date, v.date); checkDiff('區域', old.room, v.room); checkDiff('物品', old.name, v.name);
+                checkDiff('失主', old.ownerName, v.ownerName); checkDiff('電話', old.ownerPhone, v.ownerPhone);
+                checkDiff('拾獲', old.finder, v.finder); checkDiff('備註', old.note, v.note);
+                
+                if(diffs.length === 0) return closeItemModal();
+                
+                const now = new Date();
+                const editLog = "【" + now.getFullYear() + "/" + String(now.getMonth()+1).padStart(2,'0') + "/" + String(now.getDate()).padStart(2,'0') + " " + String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0') + "】 " + currentUser + " 修改:\n" + diffs.join('\n');
+                
+                old.date = v.date; old.month = pMonth; old.room = v.room; old.name = v.name; 
+                old.ownerName = v.ownerName; old.ownerPhone = v.ownerPhone; old.finder = v.finder; old.note = v.note;
+                old.editHistory = old.editHistory ? old.editHistory + '\n\n' + editLog : editLog;
+                
+                closeItemModal(); renderView(); showToast("✅ 修改已儲存", 'success');
+                
+                try {
+                    await apiCallWithRetry({
+                        action: "editItem", tab: mTab, id: old.id, date: v.date, month: pMonth,
+                        room: v.room, itemName: v.name, finder: v.finder, notes: v.note,
+                        ownerName: v.ownerName, ownerPhone: v.ownerPhone, editLog: editLog,
+                        username: currentUser, password: currentPassword
+                    });
+                    loadDataBackground();
+                } catch(e) {}
+            } else {
+                const newId = 'ID_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+                dbItems.push({
+                    id: newId, category: v.cat, date: v.date, month: pMonth, room: v.room, name: v.name, 
+                    ownerName: v.ownerName, ownerPhone: v.ownerPhone, finder: v.finder, note: v.note,
+                    status: 'active', addedBy: currentUser
+                });
+                
+                closeItemModal(); currentTab = v.cat; currentMonth = pMonth;
+                el('btn-deleted-zone').classList.replace('bg-custom-dark', 'bg-custom-base');
+                el('btn-deleted-zone').classList.replace('text-white', 'text-custom-dark');
+                renderView(); showToast("✅ 已新增：" + v.room + " " + v.name, 'success');
+                
+                try {
+                    await apiCallWithRetry({
+                        action: "addItem", tab: mTab, id: newId, date: v.date, month: pMonth,
+                        room: v.room, itemName: v.name, finder: v.finder, notes: v.note,
+                        ownerName: v.ownerName, ownerPhone: v.ownerPhone,
+                        username: currentUser, password: currentPassword
+                    });
+                    loadDataBackground();
+                } catch(e) {}
+            }
+        }
+
+        function openRetrieveModal(id) {
+            const item = dbItems.find(function(i) { return i.id === id; });
+            if (!item) return; 
+            itemToRetrieve = id;
+            el('retrieve-room').innerText = item.room || "";
+            el('retrieve-name').innerText = item.name;
+            el('retrieve-modal').classList.remove('hidden');
+            requestAnimationFrame(function() { el('retrieve-modal-content').classList.replace('scale-95', 'scale-100'); });
+            requestAnimationFrame(function() { el('retrieve-modal-content').classList.replace('opacity-0', 'opacity-100'); });
+        }
+
+        function closeRetrieveModal() {
+            el('retrieve-modal-content').classList.replace('scale-100', 'scale-95');
+            el('retrieve-modal-content').classList.replace('opacity-100', 'opacity-0');
+            setTimeout(function() { el('retrieve-modal').classList.add('hidden'); itemToRetrieve = null; }, 200);
+        }
+
+        async function executeRetrieve(reason) {
+            if (!itemToRetrieve) return;
+            const item = dbItems.find(function(i) { return i.id === itemToRetrieve; });
+            if (item) {
+                const mTab = item.category === 'safe' ? '保險箱' : '保留區';
+                const mReason = reason === 'guest' ? '客人取走' : '逾期整理';
+
+                item.status = 'deleted'; item.deleteReason = reason; item.deletedBy = currentUser;
+                const now = new Date();
+                item.deletedAtStr = now.getFullYear() + "/" + String(now.getMonth()+1).padStart(2,'0') + "/" + String(now.getDate()).padStart(2,'0') + " " + String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+                
+                closeRetrieveModal(); renderView();
+                showToast(reason === 'guest' ? '✅ 客人已取走' : '✅ 已逾期整理', 'success');
+
+                try {
+                    await apiCallWithRetry({
+                        action: "deleteItem", tab: mTab, id: item.id, retrieveType: mReason,
+                        username: currentUser, password: currentPassword
+                    });
+                    loadDataBackground();
+                } catch(e) {}
+            } else { 
+                closeRetrieveModal(); 
+            }
+        }
+
+        function showToast(msg, type) {
+            type = type || 'success';
+            const div = document.createElement('div');
+            const colorClass = type === 'success' ? 'bg-custom-dark text-white' : 'bg-red-500 text-white';
+            const iconClass = type === 'success' ? 'fa-check text-custom-accent' : 'fa-exclamation-triangle text-amber-300';
+            div.className = colorClass + " px-5 py-3 rounded-lg shadow-lg text-sm flex items-center gap-2.5 transform transition-all -translate-y-full opacity-0 font-bold tracking-wide";
+            div.innerHTML = "<i class='fas " + iconClass + " text-base'></i> <span>" + msg + "</span>";
+            el('toast-container').appendChild(div);
+            requestAnimationFrame(function() { div.classList.remove('-translate-y-full', 'opacity-0'); });
+            setTimeout(function() { 
+                div.classList.add('-translate-y-full', 'opacity-0'); 
+                setTimeout(function() { div.remove(); }, 300); 
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
